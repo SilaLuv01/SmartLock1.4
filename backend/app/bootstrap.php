@@ -6,15 +6,9 @@ $file = getenv('SMARTLOCK_CONFIG') ?: dirname(__DIR__) . '/config-PRIVATE.php';
 if (is_file($file)) {
     $config = require $file;
 } elseif (getenv('VERCEL') === '1') {
-    $config = [
-        'dsn' => getenv('DB_DSN') ?: '',
-        'db_user' => getenv('DB_USER') ?: '',
-        'db_password' => getenv('DB_PASSWORD') ?: '',
-        'base_path' => getenv('APP_BASE_PATH') ?: '',
-        'app_secret' => getenv('APP_SECRET') ?: '',
-        'read_api_token_hash' => getenv('READ_API_TOKEN_HASH') ?: '',
-        'cookie_secure' => true,
-    ];
+    require_once __DIR__ . '/VercelDbConfig.php';
+    try { $config = smartlockVercelDbConfig(); }
+    catch (Throwable $e) { http_response_code(503); exit('การตั้งค่าเว็บไม่สมบูรณ์'); }
 } else {
     http_response_code(503); exit('Smart Door Lock: กรุณาตั้งค่าฐานข้อมูลและบัญชีผู้ดูแลผ่าน CLI ก่อนใช้งาน');
 }
@@ -23,13 +17,15 @@ if (!is_array($config) || !preg_match('/^[0-9a-f]{64}$/D', $config['app_secret']
 try {
     $options = [PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_EMULATE_PREPARES=>false];
     if (getenv('VERCEL') === '1') {
-        $caPem = getenv('DB_SSL_CA_PEM') ?: '';
-        if ($caPem === '') throw new RuntimeException('database TLS CA is required');
-        $caFile = sys_get_temp_dir() . '/smartlock-db-ca.pem';
-        if (!is_file($caFile)) {
-            if (file_put_contents($caFile, $caPem, LOCK_EX) === false) throw new RuntimeException('database TLS CA unavailable');
-            @chmod($caFile, 0600);
+        $caFile = $config['db_ssl_ca_file'] ?? '';
+        if (($config['db_ssl_ca_pem'] ?? '') !== '') {
+            $caFile = sys_get_temp_dir() . '/smartlock-db-ca.pem';
+            if (!is_file($caFile)) {
+                if (file_put_contents($caFile, $config['db_ssl_ca_pem'], LOCK_EX) === false) throw new RuntimeException('database TLS CA unavailable');
+                @chmod($caFile, 0600);
+            }
         }
+        if ($caFile === '' || !is_readable($caFile)) throw new RuntimeException('database TLS CA is required');
         $options[PDO::MYSQL_ATTR_SSL_CA] = $caFile;
         $options[PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT] = true;
     }
