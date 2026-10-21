@@ -32,10 +32,16 @@ function smartlockVercelDbConfig(?callable $readEnv = null): array
         if ($defaultCa !== '' && is_readable($defaultCa)) $caFile = $defaultCa;
     }
 
+    $dbUser = $readEnv('DB_USER');
+    $dbPassword = $readEnv('DB_PASSWORD');
+    if ($dbUser === '' || $dbPassword === '') {
+        throw new RuntimeException('dedicated runtime database credentials are required');
+    }
+
     return [
         'dsn' => $dsn,
-        'db_user' => $readEnv('DB_USER') ?: ($usingTidb ? $readEnv('TIDB_USER') : ''),
-        'db_password' => $readEnv('DB_PASSWORD') ?: ($usingTidb ? $readEnv('TIDB_PASSWORD') : ''),
+        'db_user' => $dbUser,
+        'db_password' => $dbPassword,
         'db_ssl_ca_pem' => $caPem,
         'db_ssl_ca_file' => $caFile,
         'base_path' => $readEnv('APP_BASE_PATH'),
